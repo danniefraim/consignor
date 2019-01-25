@@ -25,6 +25,9 @@ class ProviderConsignor(models.Model):
                                domain="[('type','=','normal')]", help="Select category for the delivery products")
     consignor_test_mode = fields.Boolean(default=True, string="Test Mode", help="Uncheck this box to use production Consignor Web Services")
 
+    # This was removed in Odoo 10, but is used by this plugin
+    partner_id = fields.Many2one('res.partner', string='Transporter Company', required=True, help="The partner that is doing the delivery service.")
+
     @api.multi
     def load_consignor_actor(self):
         print "load_consignor_actor"
@@ -50,7 +53,7 @@ class ProviderConsignor(models.Model):
                 except KeyError:
                     sub_carrier_concept_id = None
                 sub_carrier_name = SubCarrier['SubcarrierName']
-                print sub_carrier_name
+                print sub_carrier_name.encode('UTF-8')
 
                 # Reading the product information within each service offered by the Carrier
                 for Product in SubCarrier['Products']:
@@ -61,7 +64,7 @@ class ProviderConsignor(models.Model):
                         product_prod_concept_id = None
 
                     product_prod_name = Product['ProdName']
-                    print "  - ", product_prod_name
+                    print "  - ", product_prod_name.encode('UTF-8')
 
                     # Now we are able to create the delivery product in Odoo
                     delivery_product = self.env['product.template'].search([('consignor_sub_carrier_csid', '=',
@@ -101,7 +104,6 @@ class ProviderConsignor(models.Model):
                             print delivery_carrier.id
                         else:
                             print "Delivery carrier update"
-                        print delivery_product_supplier
                     else:
                         print "Update product"
 
@@ -111,7 +113,7 @@ class ProviderConsignor(models.Model):
         # Insert or update the Carrier information in res.partner model
         carrier_partner = self.env['res.partner'].search([('consignor_carrier_csid', '=', Carrier['CarrierCSID'])])
         if not carrier_partner:
-            print "Insert ", Carrier['CarrierFullName']
+            print "Insert ", Carrier['CarrierFullName'].encode('UTF-8')
             vals = {
                 'company_type': 'company',
                 'supplier': True, 'customer': False,
@@ -125,7 +127,7 @@ class ProviderConsignor(models.Model):
                 carrier_partner = self.env['res.partner'].create(vals)
                 print carrier_partner.id
         else:
-            print "Update ", Carrier['CarrierFullName']
+            print "Update ", Carrier['CarrierFullName'].encode('UTF-8')
 
         return carrier_partner.id
 
@@ -176,7 +178,7 @@ class ProviderConsignor(models.Model):
             getshipmentprice_data['Lines'] = json.dumps(lines)
             getshipmentprice_data['shitty'] = json.dumps(sender)
             json_data = json.dumps(getshipmentprice_data)
-            print json_data
+            print json_data.encode('UTF-8')
 
             input_data = {
                 'kind': 1,
