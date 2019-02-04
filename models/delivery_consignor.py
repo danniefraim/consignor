@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # TinderBox AS - Addon, See LICENSE file for full copyright and licensing details.
 import logging
-from openerp import api, models, fields, _
-from openerp.exceptions import ValidationError
+from odoo import api, models, fields, _
+from odoo.exceptions import UserError, ValidationError
 import urllib2, urllib, httplib, urlparse, gzip, requests, json
 from urllib2 import URLError
 
@@ -30,7 +30,7 @@ class ProviderConsignor(models.Model):
 
     @api.multi
     def load_consignor_actor(self):
-        print "load_consignor_actor"
+        _logger.info("load_consignor_actor")
         url = self.consignor_server_url
         values = {'actor': self.consignor_actor_id,
                   'key': self.consignor_server_key,
@@ -53,7 +53,7 @@ class ProviderConsignor(models.Model):
                 except KeyError:
                     sub_carrier_concept_id = None
                 sub_carrier_name = SubCarrier['SubcarrierName']
-                print sub_carrier_name.encode('UTF-8')
+                _logger.info(sub_carrier_name.encode('UTF-8'))
 
                 # Reading the product information within each service offered by the Carrier
                 for Product in SubCarrier['Products']:
@@ -64,48 +64,68 @@ class ProviderConsignor(models.Model):
                         product_prod_concept_id = None
 
                     product_prod_name = Product['ProdName']
-                    print "  - ", product_prod_name.encode('UTF-8')
+                    _logger.info("  - " + product_prod_name.encode('UTF-8'))
 
-                    # Now we are able to create the delivery product in Odoo
-                    delivery_product = self.env['product.template'].search([('consignor_sub_carrier_csid', '=',
-                                                                             sub_carrier_csid), ('consignor_product_prod_csid', '=', product_prod_csid )])
-                    if not delivery_product:
-                        print "Insert product"
-                        vals = {
-                            'name': sub_carrier_name + " - " + product_prod_name,
-                            'type': 'service',
-                            'invoice_policy': 'order',
-                            'purchase_method': 'receive',
-                            'list_price': 0.00,
-                            'consignor_sub_carrier_csid': sub_carrier_csid,
-                            'consignor_product_prod_csid': product_prod_csid
-                        }
-                        if not self.consignor_test_mode:
+                    if not self.consignor_test_mode:
+                        # Now we are able to create the delivery product in Odoo
+                        delivery_product = self.env['product.template'].search([('consignor_sub_carrier_csid', '=',
+                                                                                 sub_carrier_csid), ('consignor_product_prod_csid', '=', product_prod_csid )])
+                        if not delivery_product:
+                            _logger.info("Insert product")
+                            vals = {
+                                'name': sub_carrier_name + " - " + product_prod_name,
+                                'type': 'service',
+                                'invoice_policy': 'order',
+                                'purchase_method': 'receive',
+                                'list_price': 0.00,
+                                'consignor_sub_carrier_csid': sub_carrier_csid,
+                                'consignor_product_prod_csid': product_prod_csid
+                            }
                             delivery_product = self.env['product.template'].create(vals)
                             delivery_product_supplier = self.env['product.supplierinfo'].create({'name': carrier_partner_id,
                                                                                               'company_id': 1,
                                                                                               'product_tmpl_id': delivery_product.id})
+                        else:
+                            _logger.info("Update product")
+                            vals = {
+                                'name': sub_carrier_name + " - " + product_prod_name,
+                                'type': 'service',
+                                'invoice_policy': 'order',
+                                'purchase_method': 'receive',
+                                'consignor_sub_carrier_csid': sub_carrier_csid,
+                                'consignor_product_prod_csid': product_prod_csid
+                            }
+                            delivery_product.write(vals)
+
                         # Insert or update the Delivery product in Delivery Carrier model
-                        delivery_carrier = self.env['delivery.carrier'].search([('product_id', '=', delivery_product.id),
+                        delivery_carrier = self.env['delivery.carrier'].search([('product_tmpl_id', '=', delivery_product.id),
                                                                                 ('partner_id', '=', carrier_partner_id)])
                         if not delivery_carrier:
+                            _logger.info("Insert carrier")
                             vals = {
                                 'delivery_type': 'consignor',
-                                'product_id': delivery_product.id,
-                                'shipping_enabled': True,
+                                'product_tmpl_id': delivery_product.id,
                                 'free_if_more_than': False,
                                 'partner_id': carrier_partner_id,
                                 'consignor_server_url': self.consignor_server_url,
                                 'consignor_server_key': self.consignor_server_key,
                                 'consignor_actor_id': self.consignor_actor_id
                             }
-                            if not self.consignor_test_mode:
-                                delivery_carrier = self.env['delivery.carrier'].create(vals)
-                            print delivery_carrier.id
+                            delivery_carrier = self.env['delivery.carrier'].create(vals)
+                            _logger.info(delivery_carrier.id)
                         else:
-                            print "Delivery carrier update"
-                    else:
-                        print "Update product"
+                            _logger.info("Delivery carrier update")
+                            vals = {
+                                'delivery_type': 'consignor',
+                                'product_tmpl_id': delivery_product.id,
+                                'free_if_more_than': False,
+                                'partner_id': carrier_partner_id,
+                                'consignor_server_url': self.consignor_server_url,
+                                'consignor_server_key': self.consignor_server_key,
+                                'consignor_actor_id': self.consignor_actor_id
+                            }
+                            delivery_carrier.write(vals)
+
 
         return []
 
@@ -113,7 +133,7 @@ class ProviderConsignor(models.Model):
         # Insert or update the Carrier information in res.partner model
         carrier_partner = self.env['res.partner'].search([('consignor_carrier_csid', '=', Carrier['CarrierCSID'])])
         if not carrier_partner:
-            print "Insert ", Carrier['CarrierFullName'].encode('UTF-8')
+            _logger.info("Insert " + Carrier['CarrierFullName'].encode('UTF-8'))
             vals = {
                 'company_type': 'company',
                 'supplier': True, 'customer': False,
@@ -125,9 +145,9 @@ class ProviderConsignor(models.Model):
             }
             if not self.consignor_test_mode:
                 carrier_partner = self.env['res.partner'].create(vals)
-                print carrier_partner.id
+                _logger.info(carrier_partner.id)
         else:
-            print "Update ", Carrier['CarrierFullName'].encode('UTF-8')
+            _logger.info("Update " + Carrier['CarrierFullName'].encode('UTF-8'))
 
         return carrier_partner.id
 
@@ -135,63 +155,8 @@ class ProviderConsignor(models.Model):
         res = []
 
         for order in orders:
-            price = 123.0
-            # Estimate weight of the sale order; will be definitely recomputed on the picking field "weight"
-            # Odoo operates with weight expressed in KG, Consignor operates with wight expressed in grams.
-            est_weight_value = sum([(line.product_id.weight * line.product_uom_qty) for line in order.order_line]) or 0.0
-            weight_value = _convert_weight(est_weight_value, "GR")
-
-            # Get the Carrier product
-            carrier_product = order.carrier_id
-
-            url = self.consignor_server_url
-            values = {'actor': self.consignor_actor_id,
-                      'key': self.consignor_server_key,
-                      'command': 'GetShipmentPrice'}
-            sender = []
-            sender = sender + ['hei:faen']
-            senderAddress = {}
-            senderAddress['Kind'] = '2'
-            senderAddress['Name1'] = order.warehouse_id.partner_id.name
-            senderAddress['Street1'] = order.warehouse_id.partner_id.street
-            senderAddress['PostCode'] = order.warehouse_id.partner_id.zip
-            senderAddress['City'] = order.warehouse_id.partner_id.city
-            senderAddress['CountryCode'] = order.warehouse_id.partner_id.country_id.code
-
-            receiverAddress = {}
-            receiverAddress['Kind'] = '1'
-            receiverAddress['Name1'] = order.partner_id.name
-            receiverAddress['Street1'] = order.partner_id.street
-            receiverAddress['PostalCode'] = order.partner_id.zip
-            receiverAddress['City'] = order.partner_id.city
-            receiverAddress['CountryCode'] = order.partner_id.country_id.code
-
-            lines = {}
-            lines['PkgWeight'] = weight_value
-            lines['Pkgs'] = "[ { ItemNo: 1 } ]"
-
-            getshipmentprice_data = {}
-            getshipmentprice_data['Kind'] = '1'
-            getshipmentprice_data['ActorCSID'] = self.consignor_actor_id
-            getshipmentprice_data['ProdConceptID'] = order.carrier_id.consignor_product_prod_csid
-            getshipmentprice_data['Addresses'] = '[' + json.dumps(senderAddress) + '],[' + json.dumps(receiverAddress) + ']'
-            getshipmentprice_data['Lines'] = json.dumps(lines)
-            getshipmentprice_data['shitty'] = json.dumps(sender)
-            json_data = json.dumps(getshipmentprice_data)
-            print json_data.encode('UTF-8')
-
-            input_data = {
-                'kind': 1,
-                'ActorCSID': self.consignor_actor_id,
-                'ProdConceptID': order.carrier_id.consignor_product_prod_csid
-            }
-            data = urllib.urlencode(values)
-            req = urllib2.Request(url, data)
-            response = urllib2.urlopen(req)
-            result = response.read()
-            js_res = json.loads(result)
-
-            res = res + [price]
+            # For now, we simply use the price of the product template
+            res += res + [self.product_tmpl_id.list_price]
 
         return res
 
@@ -199,8 +164,68 @@ class ProviderConsignor(models.Model):
         # Save Shipment or Submit Shipment?
         # If Save Shipment, implement a new Status,
         res = []
-        shipping_data = {'exact_price': 123.0,
-                         'tracking_number': '123456'}
+
+        for picking in pickings:
+            _logger.info("Creating Consignor shipment for picking " + str(picking.id) + " (" + picking.name.encode("UTF-8") + ")")
+
+            senderAddress = {}
+            senderAddress['Kind'] = '2'
+            senderAddress['Name1'] = picking.company_id.name
+            senderAddress['Street1'] = picking.company_id.street
+            senderAddress['PostCode'] = picking.company_id.zip
+            senderAddress['City'] = picking.company_id.city
+            senderAddress['CountryCode'] = picking.company_id.country_id.code
+
+            receiverAddress = {}
+            receiverAddress['Kind'] = '1'
+            receiverAddress['Name1'] = picking.partner_id.name
+            receiverAddress['Street1'] = picking.partner_id.street
+            receiverAddress['PostCode'] = picking.partner_id.zip
+            receiverAddress['City'] = picking.partner_id.city
+            receiverAddress['CountryCode'] = picking.partner_id.country_id.code
+
+            lines = [
+               {
+                "PkgWeight": _convert_weight(picking.shipping_weight, "GR") or 1000,
+                "Pkgs": [
+                    {"ItemNo": 1}
+                ]
+               }
+            ]
+
+            submitshipment_data = {}
+            submitshipment_data['Kind'] = '1'
+            submitshipment_data['ActorCSID'] = self.consignor_actor_id
+            submitshipment_data['ProdCSID'] = picking.carrier_id.consignor_product_prod_csid
+            #submitshipment_data['Addresses'] = '[' + json.dumps(receiverAddress) + ']'
+            #submitshipment_data['Addresses'] = '[' + json.dumps(senderAddress) + '],[' + json.dumps(receiverAddress) + ']'
+            submitshipment_data['Addresses'] = [senderAddress, receiverAddress]
+            submitshipment_data['Lines'] = lines
+            #submitshipment_data['PackagesCount'] = pickings.number_of_packages or 1
+            json_data = json.dumps(submitshipment_data)
+            _logger.info("Sending data to Consignor")
+            _logger.info(json_data.encode('UTF-8'))
+
+            url = self.consignor_server_url
+            values = {'actor': self.consignor_actor_id,
+                      'key': self.consignor_server_key,
+                      'command': 'SubmitShipment',
+                      'data': json_data,
+                      'options': '{"Labels": "none"}'}
+
+            data = urllib.urlencode(values)
+            req = urllib2.Request(url, data)
+            response = urllib2.urlopen(req)
+            result = response.read()
+            _logger.info("Received response from Consignor:")
+            _logger.info(result)
+            js_res = json.loads(result)
+
+            if "ErrorMessages" in js_res:
+                raise UserError("Error message from Consignor: " + ", ".join(js_res["ErrorMessages"]))
+
+        shipping_data = {'exact_price': 99,
+                         'tracking_number': '11123456'}
 
         res = res + [shipping_data]
         return res
