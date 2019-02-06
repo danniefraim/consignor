@@ -183,10 +183,12 @@ class ProviderConsignor(models.Model):
             receiverAddress['PostCode'] = picking.partner_id.zip
             receiverAddress['City'] = picking.partner_id.city
             receiverAddress['CountryCode'] = picking.partner_id.country_id.code
+            receiverAddress['Mobile'] = picking.partner_id.phone
+            receiverAddress['Email'] = picking.partner_id.email
 
             lines = [
                {
-                "PkgWeight": _convert_weight(picking.shipping_weight, "GR") or 1000,
+                "PkgWeight": int(_convert_weight(picking.shipping_weight, "GR")) or 1000,
                 "Pkgs": [
                     {"ItemNo": 1}
                 ]
@@ -194,6 +196,7 @@ class ProviderConsignor(models.Model):
             ]
 
             submitshipment_data = {}
+            submitshipment_data['OrderNo'] = picking.origin
             submitshipment_data['Kind'] = '1'
             submitshipment_data['ActorCSID'] = self.consignor_actor_id
             submitshipment_data['ProdCSID'] = picking.carrier_id.consignor_product_prod_csid
@@ -218,16 +221,15 @@ class ProviderConsignor(models.Model):
             response = urllib2.urlopen(req)
             result = response.read()
             _logger.info("Received response from Consignor:")
-            _logger.info(result)
+            _logger.info(result.decode("UTF-8"))
             js_res = json.loads(result)
 
             if "ErrorMessages" in js_res:
                 raise UserError("Error message from Consignor: " + ", ".join(js_res["ErrorMessages"]))
 
-        shipping_data = {'exact_price': 99,
-                         'tracking_number': '11123456'}
+            res = res + [{'tracking_number': js_res["Lines"][0]["Pkgs"][0]["PkgNo"], 'exact_price': self.product_tmpl_id.list_price}]
 
-        res = res + [shipping_data]
+        print json.dumps(res).encode("UTF-8")
         return res
 
     def consignor_get_tracking_link(self, pickings):
