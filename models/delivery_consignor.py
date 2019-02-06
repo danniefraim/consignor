@@ -3,7 +3,7 @@
 import logging
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError, ValidationError
-import urllib2, urllib, httplib, urlparse, gzip, requests, json
+import urllib2, urllib, httplib, urlparse, gzip, requests, json, csv
 from urllib2 import URLError
 
 from consignor_request import ConsignorRequest
@@ -172,6 +172,7 @@ class ProviderConsignor(models.Model):
             senderAddress['Kind'] = '2'
             senderAddress['Name1'] = picking.company_id.name
             senderAddress['Street1'] = picking.company_id.street
+            senderAddress['Street2'] = picking.company_id.street2 or ""
             senderAddress['PostCode'] = picking.company_id.zip
             senderAddress['City'] = picking.company_id.city
             senderAddress['CountryCode'] = picking.company_id.country_id.code
@@ -180,10 +181,11 @@ class ProviderConsignor(models.Model):
             receiverAddress['Kind'] = '1'
             receiverAddress['Name1'] = picking.partner_id.name
             receiverAddress['Street1'] = picking.partner_id.street
+            receiverAddress['Street2'] = picking.partner_id.street2 or ""
             receiverAddress['PostCode'] = picking.partner_id.zip
             receiverAddress['City'] = picking.partner_id.city
             receiverAddress['CountryCode'] = picking.partner_id.country_id.code
-            receiverAddress['Mobile'] = picking.partner_id.phone
+            receiverAddress['Mobile'] = picking.partner_id.mobile or picking.partner_id.phone or ""
             receiverAddress['Email'] = picking.partner_id.email
 
             lines = [
@@ -206,7 +208,7 @@ class ProviderConsignor(models.Model):
             submitshipment_data['Lines'] = lines
             #submitshipment_data['PackagesCount'] = pickings.number_of_packages or 1
             json_data = json.dumps(submitshipment_data)
-            _logger.info("Sending data to Consignor")
+            _logger.info("Saving shipment to Consignor")
             _logger.info(json_data.encode('UTF-8'))
 
             url = self.consignor_server_url
@@ -228,6 +230,29 @@ class ProviderConsignor(models.Model):
                 raise UserError("Error message from Consignor: " + ", ".join(js_res["ErrorMessages"]))
 
             res = res + [{'tracking_number': js_res["Lines"][0]["Pkgs"][0]["PkgNo"], 'exact_price': self.product_tmpl_id.list_price}]
+
+            with open('/odoo/export/' + picking.origin + '.csv', 'wb') as f:
+                fieldnames = ['name', 'street', 'street2', 'postcode', 'city', 'countrycode', 'email', 'mobile', 'ordernumber', 'shipmentid', 'carrier', 'shippingproduct', 'weight', 'consignorid', 'trackingreference']
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerow({
+                    'name': picking.partner_id.name.encode('UTF-8'),
+                    'street': picking.partner_id.street.encode('UTF-8'),
+                    'street2': picking.partner_id.street2 and picking.partner_id.street2.encode('UTF-8') or "",
+                    'postcode': picking.partner_id.zip.encode('UTF-8'),
+                    'city': picking.partner_id.city.encode('UTF-8'),
+                    'countrycode': picking.partner_id.country_id.code.encode('UTF-8'),
+                    'email': picking.partner_id.email.encode('UTF-8'),
+                    'mobile': (picking.partner_id.mobile or picking.partner_id.phone or "").encode('UTF-8'),
+                    'ordernumber': picking.origin.encode("UTF-8"),
+                    'shipmentid': picking.name.encode("UTF-8"),
+                    'carrier': self.name.encode("UTF-8"),
+                    'shippingproduct': self.product_tmpl_id.name.encode("UTF-8"),
+                    'weight': int(_convert_weight(picking.shipping_weight, "GR")) or 1000,
+                    'consignorid': js_res["ShpCSID"],
+                    'trackingreference': js_res["Lines"][0]["Pkgs"][0]["PkgNo"].encode("UTF-8")
+                })
+
 
         print json.dumps(res).encode("UTF-8")
         return res
