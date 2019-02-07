@@ -186,7 +186,7 @@ class ProviderConsignor(models.Model):
             receiverAddress['City'] = picking.partner_id.city
             receiverAddress['CountryCode'] = picking.partner_id.country_id.code
             receiverAddress['Mobile'] = picking.partner_id.mobile or picking.partner_id.phone or ""
-            receiverAddress['Email'] = picking.partner_id.email
+            receiverAddress['Email'] = picking.sale_id.partner_id.email or picking.partner_id.email
 
             lines = [
                {
@@ -242,7 +242,7 @@ class ProviderConsignor(models.Model):
                     'postcode': picking.partner_id.zip.encode('ISO 8859-1'),
                     'city': picking.partner_id.city.encode('ISO 8859-1'),
                     'countrycode': picking.partner_id.country_id.code.encode('ISO 8859-1'),
-                    'email': picking.partner_id.email.encode('ISO 8859-1'),
+                    'email': (picking.sale_id.partner_id.email or picking.partner_id.email).encode('ISO 8859-1'),
                     'mobile': (picking.partner_id.mobile or picking.partner_id.phone or "").encode('ISO 8859-1'),
                     'ordernumber': picking.origin.encode("ISO 8859-1"),
                     'shipmentid': picking.name.encode("ISO 8859-1"),
