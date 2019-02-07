@@ -236,21 +236,21 @@ class ProviderConsignor(models.Model):
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerow({
-                    'name': picking.partner_id.name.encode('UTF-8'),
-                    'street': picking.partner_id.street.encode('UTF-8'),
-                    'street2': picking.partner_id.street2 and picking.partner_id.street2.encode('UTF-8') or "",
-                    'postcode': picking.partner_id.zip.encode('UTF-8'),
-                    'city': picking.partner_id.city.encode('UTF-8'),
-                    'countrycode': picking.partner_id.country_id.code.encode('UTF-8'),
-                    'email': picking.partner_id.email.encode('UTF-8'),
-                    'mobile': (picking.partner_id.mobile or picking.partner_id.phone or "").encode('UTF-8'),
-                    'ordernumber': picking.origin.encode("UTF-8"),
-                    'shipmentid': picking.name.encode("UTF-8"),
-                    'carrier': self.name.encode("UTF-8"),
-                    'shippingproduct': self.product_tmpl_id.name.encode("UTF-8"),
+                    'name': picking.partner_id.name.encode('ISO 8859-1'),
+                    'street': picking.partner_id.street.encode('ISO 8859-1'),
+                    'street2': picking.partner_id.street2 and picking.partner_id.street2.encode('ISO 8859-1') or "",
+                    'postcode': picking.partner_id.zip.encode('ISO 8859-1'),
+                    'city': picking.partner_id.city.encode('ISO 8859-1'),
+                    'countrycode': picking.partner_id.country_id.code.encode('ISO 8859-1'),
+                    'email': picking.partner_id.email.encode('ISO 8859-1'),
+                    'mobile': (picking.partner_id.mobile or picking.partner_id.phone or "").encode('ISO 8859-1'),
+                    'ordernumber': picking.origin.encode("ISO 8859-1"),
+                    'shipmentid': picking.name.encode("ISO 8859-1"),
+                    'carrier': self.name.encode("ISO 8859-1"),
+                    'shippingproduct': self.product_tmpl_id.name.encode("ISO 8859-1"),
                     'weight': int(_convert_weight(picking.shipping_weight, "GR")) or 1000,
                     'consignorid': js_res["ShpCSID"],
-                    'trackingreference': js_res["Lines"][0]["Pkgs"][0]["PkgNo"].encode("UTF-8")
+                    'trackingreference': js_res["Lines"][0]["Pkgs"][0]["PkgNo"].encode("ISO 8859-1")
                 })
 
 
